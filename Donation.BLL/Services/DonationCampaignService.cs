@@ -32,6 +32,7 @@ namespace Donation.BLL.Services
             campaign.Hash = Guid.NewGuid().ToString();
 
             user.Password = null;
+
             user.MerchantSafe2Pay = null;
 
             campaign.User = user;
