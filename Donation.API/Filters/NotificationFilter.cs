@@ -1,0 +1,63 @@
+﻿using Donation.Domain.Contracts;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using System;
+using System.Net;
+using System.Threading.Tasks;
+
+namespace Donation.API.Filters
+{
+    public class NotificationFilter : IAsyncResultFilter
+    {
+        private readonly INotification notificationContext;
+
+        public NotificationFilter(INotification notificationContext)
+        {
+            this.notificationContext = notificationContext;
+        }
+
+        public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
+        {
+            if (notificationContext.HasNotifications())
+            {
+                int status = (int)HttpStatusCode.BadRequest;
+
+                if (context.RouteData.Values["controller"].ToString().Equals("Identity", StringComparison.OrdinalIgnoreCase))
+                {
+                    status = (int)HttpStatusCode.Unauthorized;
+                }
+
+                context.HttpContext.Response.StatusCode = status;
+                context.HttpContext.Response.ContentType = "application/json";
+
+                string response = HandleMessages(status, context.HttpContext.Request.Path);
+
+                await context.HttpContext.Response.WriteAsync(response);
+
+                return;
+            }
+
+            await next();
+        }
+
+        private string HandleMessages(int statusCode, string path)
+        {
+            ModelStateDictionary dictionary = new ModelStateDictionary();
+
+            foreach (Domain.Notifications.Notification item in notificationContext.GetNotifications())
+            {
+                dictionary.AddModelError(item.Key, $"{item.Code} - {item.Message}");
+            }
+
+            ValidationProblemDetails response = new ValidationProblemDetails(dictionary)
+            {
+                Status = statusCode,
+                Instance = path
+            };
+
+            return System.Text.Json.JsonSerializer.Serialize(response);
+        }
+    }
+}
